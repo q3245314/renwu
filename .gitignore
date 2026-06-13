@@ -1,0 +1,48 @@
+# 初始化本地仓库，并云端的仓库关联起来
+git init
+git remote add origin https://gitee.com/q3245314/keyun.git
+
+
+# 把当前分支强制重置为【01】标签
+git reset --hard 01 --
+git push origin -f
+
+
+
+
+
+
+
+# 忽略 uni-app 的打包缓存及生成目录
+/.git
+/.idea
+*.log
+*.DS_Store
+*.htaccess
+
+
+
+/template/admin/dist/
+/template/admin/.idea/
+/template/admin/node_modules/
+/template/uni-app/node_modules/
+/template/uni-app/unpackage/
+/template/uni-app/.hbuilderx/
+
+
+/crmeb/runtime/cache
+/crmeb/runtime/log
+/crmeb/runtime/session
+/crmeb/runtime/temp
+/crmeb/public/install.lock
+/crmeb/public/uploads
+/crmeb/runtime/timer.pid
+/crmeb/runtime/workerman.pid
+/docker-compose/mysql/data/
+/docker-compose/mysql/log/
+/docker-compose/nginx/log/
+/crmeb/.idea/
+/docker-compose/MacArm/mysql/data/
+/docker-compose/MacArm/mysql/log/
+/docker-compose/linux/mysql/data/
+/docker-compose/linux/mysql/log/

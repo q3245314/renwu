@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务展示表</title>
+    <script src="https://cdn.weixinss.com/css/css/3.4.16.js"></script>
+    <link href="https://cdn.weixinss.com/css/css/font-awesome.min.css" rel="stylesheet">
+    <!--
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#64748b',
+                        accent: '#06b6d4',
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        info: '#3b82f6',
+                        light: '#f8fafc',
+                        dark: '#1e293b',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'card': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                        'hover': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                    }
+                },
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .task-card {
+                @apply bg-white rounded-xl shadow-card p-5 mb-4 transition-all duration-300 hover:shadow-hover hover:-translate-y-1;
+            }
+            .task-header {
+                @apply flex items-center justify-between mb-3;
+            }
+            .task-title {
+                @apply text-lg font-semibold text-dark;
+            }
+            .task-id {
+                @apply text-xs font-medium px-2 py-1 rounded-full bg-primary/10 text-primary;
+            }
+            .task-link {
+                @apply block text-primary hover:text-primary/80 font-medium transition-colors duration-200 break-all;
+            }
+            .section-title {
+                @apply text-xl font-bold text-dark mb-4 flex items-center;
+            }
+            .section-icon {
+                @apply mr-2 text-xl;
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 font-inter min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <div class="bg-white rounded-2xl shadow-lg p-6 mb-8">
+            <h1 class="text-[clamp(1.2rem,2.7vw,2.2rem)] font-bold text-center text-dark mb-2">任务列表</h1>
+            <p class="text-center text-gray-500 mb-6">随喜善念，赞叹发心，广结善缘，福慧增长，功德无量</p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+
+                <!-- 校验任务区域 -->
+                <div class="md:pl-4">
+                    <div class="section-title">
+                        <i class="section-icon fa fa-check-square-o text-accent"></i>
+                        <span>校验任务</span>
+                    </div>
+                    <div class="space-y-3">
+
+
+                        <div class="task-card border-l-4 border-accent">
+                            <div class="task-header">
+                                <span class="task-title">WFS校对任务领取</span>
+                                <span class="task-id">ID: JY-1</span>
+                            </div>
+                            <a href="https://rw.wofosi.cn/1" target="_blank" class="task-link">
+                                <i class="fa fa-external-link mr- 1"></i> 点击进入
+                            </a>
+                        </div>
+
+                        <div class="task-card border-l-4 border-accent">
+                            <div class="task-header">
+                                <span class="task-title">校验任务2</span>
+                                <span class="task-id">ID: JY- 2</span>
+                            </div>
+                            <a href="https://rw.wofosi.cn/2" target="_blank" class="task-link">
+                                <i class="fa fa-external-link mr-1"></i> 点击进入
+                            </a>
+                        </div>
+
+
+                        <div class="task-card border-l-4 border-accent">
+                            <div class="task-header">
+                                <span class="task-title">校验任务3</span>
+                                <span class="task-id">ID: JY- 2</span>
+                            </div>
+                            <a href="https://rw.wofosi.cn/3" target="_blank" class="task-link">
+                                <i class="fa fa-external-link mr-1"></i> 点击进入
+                            </a>
+                        </div>
+
+
+                    </div>
+                </div>
+
+
+                <!-- 听打任务区域 -->
+                <div class="md:pr-4">
+                    <div class="section-title">
+                        <i class="section-icon fa fa-check-square-o text-accent"></i>
+                        <span>听打任务</span>
+                    </div>
+
+                    <div class="space-y-3">
+                        <div class="task-card border-l-4 border-primary">
+                            <div class="task-header">
+                                <span class="task-title">听打任务领取</span>
+                                <span class="task-id">ID: TD-01</span>
+                            </div>
+                            <a href="https://rw.wofosi.cn/01" target="_blank" class="task-link">
+                                <i class="fa fa-external-link mr-1"></i> 点击进入
+                            </a>
+                        </div>
+
+                        <div class="task-card border-l-4 border-primary">
+                            <div class="task-header">
+                                <span class="task-title">听打任务2</span>
+                                <span class="task-id">ID: TD-02</span>
+                            </div>
+                            <a href="https://rw.wofosi.cn/02" target="_blank" class="task-link">
+                                <i class="fa fa-external-link mr-1"></i> 点击进入
+                            </a>
+                        </div>
+
+                        <div class="task-card border-l-4 border-primary">
+                            <div class="task-header">
+                                <span class="task-title">听打任务3</span>
+                                <span class="task-id">ID: TD-02</span>
+                            </div>
+                            <a href="https://rw.wofosi.cn/03" target="_blank" class="task-link">
+                                <i class="fa fa-external-link mr-1"></i> 点击进入
+                            </a>
+                        </div>
+
+
+                    </div>
+                </div>
+
+
+            </div>
+        </div>
+
+        <!-- 任务统计卡片 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <!-- 学习专区 -->
+            <div class="bg-white rounded-xl shadow p-4 flex items-center">
+                <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mr-4">
+                    <i class="fa fa-headphones text-primary text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600 font-semibold mb-1">学习佛法</p>
+                    <a href="https://rw.wofosi.cn/" target="_blank"
+                        class="inline-flex items-center text-primary text-base font-semibold hover:underline">
+                        <i class="fa fa-external-link mr-1"></i>点击进入
+                    </a>
+                </div>
+            </div>
+
+            <!-- 任务总量 -->
+            <div class="bg-white rounded-xl shadow p-4 flex items-center">
+                <div class="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center mr-4">
+                    <i class="fa fa-check-square-o text-accent text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600 font-semibold mb-1">任务总量</p>
+                    <p class="text-2xl font-bold text-accent">004</p>
+                </div>
+            </div>
+
+            <!-- 当前日期 -->
+            <div class="bg-white rounded-xl shadow p-4 flex items-center">
+                <div class="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mr-4">
+                    <i class="fa fa-clock-o text-success text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600 font-semibold mb-1">当前日期</p>
+                    <p id="beijing-time" class="text-2xl font-bold text-success"></p>
+                </div>
+            </div>
+
+            <!-- 农历日期 -->
+            <div class="bg-white rounded-xl shadow p-4 flex items-center">
+                <div class="w-12 h-12 rounded-full bg-warning/10 flex items-center justify-center mr-4">
+                    <i class="fa fa-calendar text-warning text-2xl"></i>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600 font-semibold mb-1">农历日期</p>
+                    <p id="lunar-date" class="text-2xl font-bold text-warning"></p>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- 使用帮助 -->
+        <div class="bg-blue-50 border-l-4 border-primary rounded-r-lg p-4 mb-8">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <i class="fa fa-info-circle text-primary"></i>
+                </div>
+                <div class="ml-3">
+                    <h3 class="text-sm font-medium text-primary">任何问题建议反馈请联系微信：644571381</h3>
+                    <div class="mt-2 text-sm text-blue-700 space-y-1">
+
+                        <p>• 佛光常摄受，福慧皆增长<br>
+                            • 乘佛大愿力，共同往西方<br>
+                            • 念佛既是乘佛愿力，乘佛愿力必得往生<br></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        function updateTimeAndLunar() {
+            const now = new Date();
+
+            // 直接使用本地时间（假设系统时区已设置为北京时间）
+            const timeString = now.toLocaleString('zh-CN', {
+                hour12: false,
+                month: '2-digit',
+                day: '2-digit',
+            });
+            document.getElementById('beijing-time').textContent = timeString;
+
+            // 直接使用本地时间获取农历日期
+            const lunarFormatter = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
+                month: '2-digit',
+                day: '2-digit',
+            });
+            const lunarString = lunarFormatter.format(now);
+            document.getElementById('lunar-date').textContent = lunarString;
+        }
+
+        // 首次调用，立即显示
+        updateTimeAndLunar();
+
+        // 添加页面加载动画效果
+        document.addEventListener('DOMContentLoaded', function () {
+            // 任务卡片淡入效果
+            const taskCards = document.querySelectorAll('.task-card');
+            taskCards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(20px)';
+                setTimeout(() => {
+                    card.style.transition = 'opacity 0.5s ease, transform 0.5s ease, box-shadow 0.3s ease, transform 0.3s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, 100 * index);
+            });
+
+            // 添加链接点击效果
+            const taskLinks = document.querySelectorAll('.task-link');
+            taskLinks.forEach(link => {
+                link.addEventListener('click', function (e) {
+                    // 显示加载状态
+                    this.innerHTML = '<i class="fa fa-spinner fa-spin mr-1"></i> 加载中...';
+
+                    // 2秒后恢复原状
+                    setTimeout(() => {
+                        this.innerHTML = '<i class="fa fa-external-link mr-1"></i> 点击进入';
+                    }, 2000);
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

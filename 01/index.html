@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>任务领取系统</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div class="container">
+    <h1 contenteditable="true" id="systemTitle">任务领取系统</h1>
+    <div class="settings-panel">
+      <div class="button-container">
+        <button id="toggleSettings" class="settings-btn">功能菜单</button>
+        <button id="saveTasksBtn" class="settings-btn">保存修改</button>
+      </div>
+      <div id="settingsForm" class="hidden">
+        <div class="settings-row">
+          <label for="taskCount">设置任务数量:</label>
+          <input type="number" id="taskCount" min="1" max="300" value="2">
+        </div>
+        <div class="settings-row">
+          <label for="progressCount">设置进度数量:</label>
+          <input type="number" id="progressCount" min="1" max="10" value="4">
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button id="quanbu" class="settings-btn">查看隐藏</button>
+          <button id="addTasks" class="settings-btn">新增</button>
+          <button id="daochu" class="settings-btn">导出</button>
+          <button id="applySettings" class="settings-btn" style="margin-left: auto;">重置</button>
+        </div>
+      </div>
+    </div>
+    <div class="task-container" id="taskContainer"></div>
+    <div class="pagination" id="pagination">
+      <button id="prevPage" class="pagination-btn">上一页</button>
+      <button id="nextPage" class="pagination-btn">下一页</button>
+      <span id="pageInfo" class="page-info"></span>
+      <button id="firstPage" class="pagination-btn">首页</button> <input type="number" id="pageJumpInput"
+        class="page-jump-input" min="1">
+      <button id="jumpPage" class="pagination-btn">跳转</button>
+    </div>
+    </div>
+    <button id="backToTopBtn">↑</button>
+    <button id="goToBottomBtn">↓</button>
+  <script>
+    let tasks = [];
+    let systemTitle = "任务领取系统";
+    let hasChanges = false; // 添加修改标记变量
+    let currentVersion = 1; // 乐观锁变量
+    let autoSaveTimer = null; //用于防抖保存的定时器
+    let showAll = false;    // 新增：控制是否显示全部任务的开关
+    let currentPage = 1;    // 当前页码
+    const pageSize = 50;    // 每页显示条数
+    // 缓存常用 DOM 元素
+    const dom = {
+      taskContainer: document.getElementById('taskContainer'),
+      taskCount: document.getElementById('taskCount'),
+      progressCount: document.getElementById('progressCount'),
+      settingsForm: document.getElementById('settingsForm'),
+      toggleSettingsBtn: document.getElementById('toggleSettings'),
+      saveTasksBtn: document.getElementById('saveTasksBtn'),
+      applySettings: document.getElementById('applySettings'),
+      addTasks: document.getElementById('addTasks'),
+      systemTitle: document.getElementById('systemTitle'),
+      pagination: document.getElementById('pagination'),
+      prevPage: document.getElementById('prevPage'),
+      nextPage: document.getElementById('nextPage'),
+      firstPage: document.getElementById('firstPage'), // 【新增】获取首页按钮
+      pageInfo: document.getElementById('pageInfo'),
+      pageJumpInput: document.getElementById('pageJumpInput'),
+      jumpPage: document.getElementById('jumpPage')
+    };
+
+    // 密码容器函数
+    function showModal({
+      title = '', showInput = false, inputType = 'text',
+      confirmText = '确认', cancelText = '取消', showCancel = false
+    }) {
+      return new Promise(resolve => {
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.innerHTML = `<div class="modal-content">
+      <h3 class="modal-title">${title}</h3>
+      ${showInput ? `<input class="modal-input" type="${inputType}" ${inputType === 'password' ? 'inputmode="numeric" pattern="[0-9]*"' : ''}>` : ''}
+      <div class="modal-buttons">
+        ${showCancel ? `<button class="modal-button">${cancelText}</button>` : ''}
+        <button class="modal-button">${confirmText}</button>
+      </div>
+    </div>`;
+        const btns = modal.querySelectorAll('.modal-button'),
+          confirmBtn = showCancel ? btns[1] : btns[0],
+          inputEl = modal.querySelector('.modal-input');
+        confirmBtn.onclick = () => (document.body.removeChild(modal), resolve(showInput ? inputEl?.value : true));
+        if (showCancel) btns[0].onclick = () => (document.body.removeChild(modal), resolve(false));
+        if (inputEl) inputEl.addEventListener('keydown', e => e.key === 'Enter' && (e.preventDefault(), confirmBtn.click()));
+        document.body.appendChild(modal);
+        (inputEl || confirmBtn).focus();
+      });
+    }
+
+    // 乐观锁
+    async function loadTasks() {
+      try {
+        const res = await fetch('load.php');
+        const data = await res.json();
+        tasks = data.tasks || [];
+        systemTitle = data.systemTitle || "任务领取系统";
+        currentVersion = data.version || 1;
+      } catch (error) {
+        console.error('加载任务失败:', error);
+        tasks = [];
+        systemTitle = "任务领取系统";
+        currentVersion = 1;
+      } finally {
+        dom.systemTitle.textContent = systemTitle;
+        document.title = systemTitle;
+        renderTasks();
+      }
+    }
+    // ============ 新增：公共重组与重新编号函数 ============
+    function reorderTasks() {
+      tasks.forEach((t, i) => t.order ??= i + 1);
+      const lows = [], highs = [];
+      tasks.forEach(t => (t.order <= 100 ? lows : highs).push(t));
+      if (lows.length > 100) {
+        highs.unshift(...lows.splice(100)); // 溢出部分自动推入隐藏池头部
+      }
+      tasks.splice(0, tasks.length, ...lows.map((t,i)=>(t.order=i+1,t)), ...highs.map((t,i)=>(t.order=i+101,t)));
+    }
+    async function saveTasks() {
+      try {
+        // 合并标题赋值
+        document.title = systemTitle = dom.systemTitle.textContent.trim();
+        // 简化fetch配置
+        const response = await fetch('save.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ version: currentVersion, tasks, systemTitle }),
+          keepalive: true // 【新增】确保网页关闭、切后台时，请求依然能被浏览器强制发送成功
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          // 新增：检测到版本冲突时自动刷新
+          if (response.status === 409) {
+            await loadTasks(); // 新增：版本冲突时重新加载数据
+          }
+          throw new Error(errorData.message || '网络或服务器出现错误');
+        }
+        const result = await response.json();
+        currentVersion = result.newVersion;
+        return true;
+      } catch (error) {
+        await showModal({
+          title: `保存失败：${error.message}` // 版本冲突：<br>
+        });
+        return false;
+      }
+    }
+    function getTaskInputValues() {
+      return {
+        taskCount: parseInt(dom.taskCount.value, 10),
+        progressCount: parseInt(dom.progressCount.value, 10)
+      };
+    }
+    function createTasks(taskCount, progressCount, reset = false) {
+      const newTasks = [];
+      const lastIndex = reset ? 0 : (tasks.length ? parseInt(tasks[tasks.length - 1].name.match(/\d+/)?.[0] || 0) : 0);
+      for (let i = 1; i <= taskCount; i++) {
+        const progresses = Array.from({ length: progressCount }, (_, j) => ({
+
+          //任务模式切换——————【空名字】与【自动填写名字】——————
+          name: ``,
+          // name: `${j + 1}校`,
+
+          completed: false,
+          assignee: "",
+          完成时间: "",
+          领取时间: "",
+        }));
+        newTasks.push({ name: `${lastIndex + i}：`, progresses });
+      }
+      return newTasks;
+    }
+    function updateToggleLabel(label, progress) {
+      if (!progress.assignee) {
+        label.textContent = '待领取';
+        label.style.color = '#3498db';
+      } else if (progress.completed) {
+        label.textContent = '已完成';
+        label.style.color = '#28a745';
+      } else {
+        label.textContent = '进行中';
+        label.style.color = '#ffc107';
+      }
+    }
+
+    // 新增：统一获取当前可见的任务列表（带上原始索引方便修改数据）
+    function getVisibleTasks() {
+      return tasks
+        .map((t, i) => { t.order ??= i + 1; return { ...t, originalIndex: i }; })
+        .filter(t => showAll ? t.order > 100 : t.order <= 100);
+    }
+    // 计算总页数
+    function getTotalPages() {
+      return Math.ceil(getVisibleTasks().length / pageSize) || 1;
+    }
+    // 更新分页信息
+    function updatePagination() {
+      const totalPages = getTotalPages();
+      if (currentPage > totalPages) currentPage = totalPages;
+      const visibleCount = getVisibleTasks().length;
+      dom.pageInfo.textContent = `第 ${currentPage}/${totalPages} 页，共 ${visibleCount} 条任务`;
+      dom.firstPage.disabled = currentPage <= 1; // 【新增】当前在第一页时，禁用首页按钮
+      dom.prevPage.disabled = currentPage <= 1;
+      dom.nextPage.disabled = currentPage >= totalPages;
+      dom.pageJumpInput.max = totalPages;
+      dom.pageJumpInput.value = totalPages; // 默认显示尾页
+      checkJumpButtonStatus();             // 初始化时触发一次状态检查
+    }
+    function renderTasks() {
+      dom.taskContainer.innerHTML = '';
+      // 直接获取过滤后的可见任务
+      const visibleTasks = getVisibleTasks();
+      // 计算当前页的数据范围
+      const startIndex = (currentPage - 1) * pageSize;
+      const endIndex = Math.min(startIndex + pageSize, visibleTasks.length);
+      const currentPageTasks = visibleTasks.slice(startIndex, endIndex);
+      
+      currentPageTasks.forEach(({ originalIndex: taskIndex }) => {
+        const task = tasks[taskIndex];
+        const taskSection = document.createElement('div');
+        taskSection.className = 'task-section';
+        const taskTitleWrapper = document.createElement('div');
+        taskTitleWrapper.className = 'task-title-wrapper';
+        taskTitleWrapper.style.display = 'flex';
+        taskTitleWrapper.style.justifyContent = 'space-between';
+        taskTitleWrapper.style.alignItems = 'center';
+        const taskTitle = document.createElement('div');
+        taskTitle.className = 'task-title';
+        taskTitle.contentEditable = true;
+        taskTitle.textContent = task.name;
+        taskTitle.style.flex = '1';
+        // 编辑任务名称事件
+        taskTitle.addEventListener('blur', () => {
+          if (taskTitle.textContent.trim() !== task.name) {
+            tasks[taskIndex].name = taskTitle.textContent.trim();
+            renderTasks();
+            hasChanges = true;
+          }
+        });
+        // 创建排序输入框
+        const positionInput = document.createElement('input');
+        positionInput.type = 'number';
+        positionInput.min = '1';
+        positionInput.value = task.order;
+        positionInput.style = 'width: 20%; height: 30px; margin-left: 10px; text-align: center; max-width: 70px;';
+        //更改排序事件
+        positionInput.addEventListener('change', () => {
+          const v = parseInt(positionInput.value) || 1;
+          const isLow = v <= 100;
+          const [movedTask] = tasks.splice(taskIndex, 1); 
+          const lowCount = tasks.filter(t => t.order <= 100).length;
+          const finalIndex = isLow 
+            ? Math.max(0, Math.min(v - 1, lowCount))
+            : lowCount + Math.max(0, Math.min(v - 101, tasks.length - lowCount));
+          movedTask.order = v; // 【新增】确保重组函数能正确识别并将其分流至101及以上的隐藏池
+          tasks.splice(finalIndex, 0, movedTask);
+          reorderTasks();  // 调用公共函数重组并统一重新编号
+          renderTasks();
+          hasChanges = true;
+        });
+        // 创建删除按钮
+        const deleteBtn = document.createElement('button');
+        deleteBtn.title = '删除该任务';
+        deleteBtn.style = 'cursor:pointer; border:none; background:transparent; font-size:16px;';
+        deleteBtn.textContent = '🗑️';
+        //删除任务事件
+        deleteBtn.addEventListener('click', () => {
+          tasks.splice(taskIndex, 1);
+          renderTasks();
+          hasChanges = true;
+        });
+        taskTitleWrapper.append(taskTitle, positionInput, deleteBtn);
+        taskSection.appendChild(taskTitleWrapper);
+        const progressList = document.createElement('div');
+        progressList.className = 'progress-list';
+        task.progresses.forEach((progress, progressIndex) => {
+          if (progressIndex > 0) {
+            const connector = document.createElement('div');
+            connector.className = 'progress-connector';
+            progressList.appendChild(connector);
+          }
+          const progressItem = document.createElement('div');
+          progressItem.className = `progress-item ${progress.completed ? 'completed' : 'pending'}`;
+          const progressInfo = document.createElement('div');
+          progressInfo.className = 'progress-info';
+          // 状态和控制区域（第二行）
+          const statusControls = document.createElement('div');
+          statusControls.className = 'status-and-controls';
+          const statusIndicator = document.createElement('div');
+          statusIndicator.className = `status-indicator ${progress.completed ? 'status-completed' : (progress.assignee ? 'status-pending' : 'status-pending-wait')}`;
+          // 进度名称（移动到状态指示器后面）
+          const progressName = document.createElement('div');
+          progressName.className = 'progress-name';
+          progressName.textContent = progress.name;
+          progressName.contentEditable = true;
+          //修改进度名称事件
+          progressName.addEventListener('blur', () => {
+            if (progressName.textContent.trim() !== progress.name) {
+              progress.name = progressName.textContent.trim();
+              renderTasks();
+              hasChanges = true;
+            }
+          });
+          const statusToggle = document.createElement('div');
+          statusToggle.className = 'status-toggle';
+          const toggleLabel = document.createElement('span');
+          toggleLabel.className = 'toggle-label';
+          updateToggleLabel(toggleLabel, progress);
+          const toggleSwitch = document.createElement('label');
+          toggleSwitch.className = 'toggle-switch';
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = progress.completed;
+          checkbox.onchange = async () => {
+            if (!progress.assignee) {
+              await showModal({
+                title: `未填写完成人姓名`
+              });
+              checkbox.checked = false;
+              return;
+            }
+            progress.completed = checkbox.checked;
+            if (progress.completed) {
+              const now = new Date();
+              progress.完成时间 = now.toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                //second: '2-digit'
+              });
+            }
+            renderTasks();
+            tryAutoSave(); // 【修改】改为调用带检查的保存函数
+          };
+
+          const slider = document.createElement('span');
+          slider.className = 'slider';
+          toggleSwitch.append(checkbox, slider);
+          statusToggle.append(toggleLabel, toggleSwitch);
+          const assigneeEditor = document.createElement('div');
+          assigneeEditor.className = 'assignee-editor';
+
+          // 任务模式切换——————【上一进度未完成，或未填写姓名时，不允许编辑姓名】 与 【可随意编辑姓名】
+          // const canEdit = !progress.completed && (progressIndex === 0 || task.progresses[progressIndex - 1].completed);
+          const canEdit = !progress.completed;
+
+          assigneeEditor.contentEditable = canEdit;
+          assigneeEditor.textContent = progress.assignee;
+          assigneeEditor.style.border = canEdit && !progress.assignee ? '1px solid #999' : 'none';
+          if (progress.completed) {
+            assigneeEditor.style.color = '#28a745';  // 添加这行设置已完成任务的文字颜色
+          }
+
+          // input 事件只卖力气负责 UI：打字时圆圈、文字、时间立刻变色，不触发存盘，零延迟零消耗
+          assigneeEditor.addEventListener('input', function () {
+            const newName = this.textContent.trim();
+            progress.assignee = newName;
+            const now = new Date();
+            const timeString = now.toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                // second: '2-digit' 
+            });
+            progress.领取时间 = timeString;
+            updateToggleLabel(toggleLabel, progress);
+            statusIndicator.className = `status-indicator ${progress.completed ? 'status-completed' : (newName ? 'status-pending' : 'status-pending-wait')}`;
+            const timeDisplay = this.closest('.progress-info').querySelector('.progress-name02 div:first-child');
+            if (timeDisplay) {
+                timeDisplay.textContent = timeString;
+            }
+            // hasChanges = true; // 【删除】填写姓名属于自动保存操作，不应标记为需要手动保存的修改
+            if (autoSaveTimer) clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+              autoSaveTimer = null;
+              tryAutoSave(); // 【修改】改为调用带检查的保存函数
+            }, 500);
+          });
+          // 失去聚焦事件
+          assigneeEditor.addEventListener('blur', function () {
+            // 只有打过字（autoSaveTimer不为null）才会触发数据保存
+            if (autoSaveTimer) {
+                clearTimeout(autoSaveTimer); // 掐断定时器
+                autoSaveTimer = null;        // 重置标记
+                tryAutoSave();               // 立刻存盘
+            }
+          });
+
+          // 组装控制行
+          statusControls.append(statusIndicator, progressName, statusToggle, assigneeEditor);
+          // 时间记录文本框
+          const newProgressName = document.createElement('div');
+          newProgressName.className = 'progress-name02';
+          newProgressName.style.display = 'grid';
+          newProgressName.style.gridTemplateColumns = '1fr 1fr';
+          newProgressName.style.gap = '40%';
+          const timeInput = document.createElement('div');
+          timeInput.contentEditable = false; // true为可编辑，false为不可编辑
+          timeInput.textContent = progress.领取时间 || '';
+          timeInput.addEventListener('blur', () => {
+            progress.领取时间 = timeInput.textContent.trim();
+            renderTasks();
+          });
+          const statusInput = document.createElement('div');
+          statusInput.contentEditable = false; // true为可编辑，false为不可编辑
+          statusInput.textContent = progress.完成时间 || '';
+          //statusInput.style.textAlign = 'right'; // 文字靠右
+          statusInput.style.textAlign = 'center'; // 文字居中
+          statusInput.style.margin = '0% 0% 0% 22%';  //外边距：上、右、下、左
+          statusInput.addEventListener('blur', () => {
+            progress.完成时间 = statusInput.textContent.trim();
+            renderTasks();
+          });
+          newProgressName.append(timeInput, statusInput);
+          // 组装整个进度信息
+          progressInfo.append(statusControls, newProgressName);
+          progressItem.appendChild(progressInfo);
+          progressList.appendChild(progressItem);
+        });
+        taskSection.appendChild(progressList);
+        dom.taskContainer.appendChild(taskSection);
+      });
+      
+      // 更新分页信息
+      updatePagination();
+    }
+// 新增："显示全部"按钮点击事件
+    document.getElementById('quanbu').addEventListener('click', function() {
+      showAll = !showAll;
+      this.textContent = showAll ? "查看默认" : "查看隐藏";
+      currentPage = 1; // 重置到第一页
+      renderTasks(); // 重新渲染列表
+    });
+    // 分页事件绑定（翻页后瞬间直达底部，无动画，方便连续操作）
+    dom.firstPage.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage = 1;
+        renderTasks();
+        window.scrollTo(0, document.body.scrollHeight); // 瞬间去到底部
+      }
+    });
+    dom.prevPage.addEventListener('click', () => {
+      if (currentPage > 1) {
+        currentPage--;
+        renderTasks();
+        window.scrollTo(0, document.body.scrollHeight); // 瞬间去到底部
+      }
+    });
+    dom.nextPage.addEventListener('click', () => {
+      if (currentPage < getTotalPages()) {
+        currentPage++;
+        renderTasks();
+        window.scrollTo(0, document.body.scrollHeight); // 瞬间去到底部
+      }
+    });
+    dom.jumpPage.addEventListener('click', () => {
+      const page = parseInt(dom.pageJumpInput.value);
+      if (!isNaN(page) && page >= 1 && page <= getTotalPages()) {
+        currentPage = page;
+        renderTasks();
+        // 【删除】删掉了 dom.pageJumpInput.value = ''; 从而在重新渲染后依然会自动保持为最新总页数
+        window.scrollTo(0, document.body.scrollHeight); // 瞬间去到底部
+      }
+    });
+    // 巧妙的共用检查函数：一步到位处理所有置灰逻辑
+    function checkJumpButtonStatus() {
+      const val = parseInt(dom.pageJumpInput.value, 10);
+      const totalPages = getTotalPages();
+      dom.jumpPage.disabled = (val === currentPage || val < 1 || val > totalPages || totalPages <= 1 || isNaN(val));
+    }
+    dom.pageJumpInput.addEventListener('input', checkJumpButtonStatus);
+    dom.pageJumpInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !dom.jumpPage.disabled) {
+        dom.jumpPage.click();
+      }
+    });
+    // 事件绑定
+    dom.toggleSettingsBtn.addEventListener('click', () => {
+      dom.settingsForm.classList.toggle('hidden');
+      dom.toggleSettingsBtn.textContent = dom.settingsForm.classList.contains('hidden') ? '功能菜单' : '折叠菜单';
+    });
+    // 修改 dom.applySettings 事件监听器
+    dom.applySettings.addEventListener('click', () => {
+      const { taskCount, progressCount } = getTaskInputValues();
+      tasks = createTasks(taskCount, progressCount, true);
+      renderTasks();
+      dom.settingsForm.classList.add('hidden');
+      dom.toggleSettingsBtn.textContent = '功能菜单';
+      hasChanges = true; // 设置修改标志
+    });
+    // 修改 dom.addTasks 事件监听器
+    dom.addTasks.addEventListener('click', () => {
+      const { taskCount, progressCount } = getTaskInputValues();
+      tasks.unshift(...createTasks(taskCount, progressCount));
+      reorderTasks(); // 新增任务后，调用公共函数进行重新排序
+      renderTasks();
+      hasChanges = true; // 设置修改标志
+    });
+    // 修改标题事件
+    dom.systemTitle.addEventListener('blur', () => {
+      if (dom.systemTitle.textContent.trim() !== systemTitle) {
+        systemTitle = dom.systemTitle.textContent.trim();
+        document.title = systemTitle;
+        hasChanges = true;
+      }
+    });
+    // 新增：点击菜单面板内的任意按钮时，自动折叠菜单
+    dom.settingsForm.addEventListener('click', (e) => {
+        if (e.target.tagName === 'BUTTON') {
+          dom.settingsForm.classList.add('hidden');
+          dom.toggleSettingsBtn.textContent = '功能菜单';
+        }
+      });
+    // 新增：安全的自动保存检查函数
+    async function tryAutoSave() {
+      // 如果检测到有未保存的重要修改（如改了标题、删了任务）
+      if (hasChanges) {
+        // 强制进行密码验证
+        const isPasswordCorrect = await checkPassword();
+        if (!isPasswordCorrect) {
+          // 密码错误或取消，重新加载数据以撤销未授权的修改
+          await loadTasks(); 
+          return;
+        }
+        // 密码正确，允许保存，并重置修改标记
+        hasChanges = false;
+      }
+      // 执行保存
+      saveTasks();
+    }
+
+    // 保存按钮的事件
+    dom.saveTasksBtn.addEventListener('click', async function () {
+      const isConfirmed = await showModal({
+        title: '点击确定后，所有修改将被保存，请谨慎操作！',
+        showCancel: true  // 显式设置为true（其实可以省略，因为默认就是true）
+      });
+      if (!isConfirmed) return;
+      // 如果有更改重要数据，则校验密码
+      if (hasChanges) {
+        const isPasswordCorrect = await checkPassword();
+        if (!isPasswordCorrect) return;
+      }
+      const saved = await saveTasks();
+      if (saved) {
+        await showModal({
+          title: '保存成功'
+        });
+        hasChanges = false;
+      }
+    });
+
+    // 密码验证事件及容器样式
+    function checkPassword() {
+      return showModal({
+        title: '重要数据被修改，需要密码验证',
+        showInput: true,
+        inputType: 'password',
+        showCancel: true
+      }).then(async password => {
+        if (password === false) return false;
+        if (password !== '3') {
+          await showModal({
+            title: '密码错误，请重试'
+          });
+          return false;
+        }
+        return true;
+      });
+    }
+
+    // 导出XLS按钮事件
+    document.getElementById('daochu').addEventListener('click', () => {
+      const htmlContent = generateXLS();
+      const blob = new Blob([htmlContent], { type: 'application/vnd.ms-excel' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'tasks.json.xls'; // 文件名，后缀.xls
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    });
+    // 新增生成XLS文件内容函数
+    function generateXLS() {
+      // 简单的转义函数，防止 HTML 注入
+      function escapeHtml(str) {
+        return (str || '').toString().replace(/</g, '&lt;');
+      }
+      // 使用 flatMap 一次性把每个 task 的多条 progress 记录展平成一个行字符串数组
+      const rows = tasks.flatMap(task =>
+        task.progresses.map((progress, i) => {
+          const isFirst = i === 0;
+          const tdStyle = isFirst ? 'border-bottom:none;' : 'border-top:none;border-bottom:none;';
+          const taskNameCell = isFirst ? escapeHtml(task.name) : '';
+          return `<tr>
+        <td style="${tdStyle}">${taskNameCell}</td>
+        <td>${escapeHtml(progress.name)}</td>
+        <td>${progress.assignee ? escapeHtml(progress.assignee) : ''}</td>
+        <td>${progress.领取时间 || ''}</td>
+        <td>${progress.完成时间 || ''}</td>
+        <td>${progress.completed ? '已完成' : ''}</td>
+        </tr>`;
+        })
+      ).join('');
+      // 拼回完整的 Excel HTML 文档
+      return `
+      <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head><meta charset="UTF-8"><!--[if gte mso 9]>
+      <xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>任务列表</x:Name></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml>
+      <![endif]--></head>
+      <body><table border="1">
+      <tr><th>任务名称</th><th>进度名称</th><th>领取人</th><th>领取时间</th><th>完成时间</th><th>完成状态</th></tr>
+      ${rows}</table></body></html>
+    `;
+    }
+    loadTasks();
+
+    // 触发失焦，数据就会在网页关闭前瞬间发出
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl.classList.contains('assignee-editor')) {
+          activeEl.blur(); 
+        }
+      }
+    });
+
+  // 顶部 / 底部双跳转按钮逻辑
+  const backToTopBtn = document.getElementById('backToTopBtn');
+  const goToBottomBtn = document.getElementById('goToBottomBtn');
+  if (backToTopBtn) backToTopBtn.style.display = 'block';
+  if (goToBottomBtn) goToBottomBtn.style.display = 'block';
+  backToTopBtn?.addEventListener('click', () => {
+    window.scrollTo(0, 0);
+  });
+  // 左侧按钮：去到底部
+  goToBottomBtn?.addEventListener('click', () => {
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+
+    // window.addEventListener('load', () => {
+    //   showModal({
+    //     title: '已开启自动保存模式</br>所有普通操作将自动保存'
+    //   });
+    // });
+  </script>
+</body>
+</html>
